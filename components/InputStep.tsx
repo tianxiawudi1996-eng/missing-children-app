@@ -9,6 +9,45 @@ interface InputStepProps {
   apiKey?: string;
 }
 
+// --- CONSTANTS: EXPANDED OPTIONS ---
+const MUSIC_GENRES = [
+  'Ballad/OST', 'K-Pop Ballad', 'Cinematic Score', 'Piano Solo', 
+  'Orchestral', 'Acoustic Folk', 'R&B/Soul', 'Indie Pop', 
+  'New Age/Ambient', 'Gospel/CCM', 'Lo-Fi Study', 'Epic Trailer', 
+  'Soft Rock', 'Jazz/Blues', 'Children Song'
+];
+
+const MUSIC_MOODS = [
+  'Touching & Sad', 'Hopeful & Bright', 'Urgent & Tense', 'Calm & Peaceful',
+  'Nostalgic', 'Dramatic', 'Heavenly/Ethereal', 'Bitter-sweet', 'Mysterious'
+];
+
+const MUSIC_INSTRUMENTS = [
+  'Piano, Strings', 'Full Orchestra', 'Acoustic Guitar', 'Electric Guitar',
+  'Minimal Piano', 'Synthesizer', 'Choir/Vocals', 'Traditional Korean'
+];
+
+const VISUAL_LIGHTING = [
+  'Cinematic/Moody', 'Natural Sunlight', 'Golden Hour (Sunset)', 'Soft Window Light',
+  'Studio Lighting', 'Dark/Mystery (Noir)', 'Silhouette', 'Ethereal/Dreamy'
+];
+
+const VISUAL_ANGLES = [
+  'Eye Level', 'Low Angle (Heroic)', 'High Angle', 'Drone View (Aerial)',
+  'Close-up (Portrait)', 'Extreme Close-up (Details)', 'Dutch Angle (Unease)'
+];
+
+const VISUAL_BACKGROUNDS = [
+  'Realistic Location', 'Last Seen Location', 'Empty Room/Home', 'School/Playground',
+  'Busy Street (Crowd)', 'Nature/Forest', 'Blurry/Bokeh', 'Solid Black', 'Abstract Dream'
+];
+
+const VISUAL_STYLES = [
+  'Documentary Photo', 'Hyper-Realistic 8K', 'Cinematic Film (35mm)', 'Vintage Polaroid',
+  'Black & White Noir', '3D Pixar Animation', 'Studio Ghibli Style', 'Oil Painting',
+  'Watercolor', 'Pencil Sketch', 'Unreal Engine 5 Render', 'Claymation'
+];
+
 const InputStep: React.FC<InputStepProps> = ({ value, onChange, onNext, apiKey }) => {
   const [mode, setMode] = useState<'text' | 'youtube'>('text');
   const [youtubeInput, setYoutubeInput] = useState('');
@@ -18,19 +57,19 @@ const InputStep: React.FC<InputStepProps> = ({ value, onChange, onNext, apiKey }
   const [manualMusicStyle, setManualMusicStyle] = useState('');
   
   // Music Studio Settings
-  const [musicGenre, setMusicGenre] = useState('Ballad/OST');
-  const [musicMood, setMusicMood] = useState('Touching & Sad');
-  const [musicInstruments, setMusicInstruments] = useState('Piano, Strings');
+  const [musicGenre, setMusicGenre] = useState(MUSIC_GENRES[0]);
+  const [musicMood, setMusicMood] = useState(MUSIC_MOODS[0]);
+  const [musicInstruments, setMusicInstruments] = useState(MUSIC_INSTRUMENTS[0]);
   const [musicTempo, setMusicTempo] = useState('Slow');
 
   const [autoGenerateImages, setAutoGenerateImages] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<"1:1" | "4:3" | "16:9" | "9:16">("16:9");
   
   // Visual Studio Settings
-  const [lighting, setLighting] = useState('Cinematic/Moody');
-  const [angle, setAngle] = useState('Eye Level');
-  const [background, setBackground] = useState('Realistic Location');
-  const [style, setStyle] = useState('Documentary Photo');
+  const [lighting, setLighting] = useState(VISUAL_LIGHTING[0]);
+  const [angle, setAngle] = useState(VISUAL_ANGLES[0]);
+  const [background, setBackground] = useState(VISUAL_BACKGROUNDS[0]);
+  const [style, setStyle] = useState(VISUAL_STYLES[0]);
   
   // Reference Images
   const [refImages, setRefImages] = useState<string[]>([]);
@@ -151,12 +190,12 @@ const InputStep: React.FC<InputStepProps> = ({ value, onChange, onNext, apiKey }
         {musicMode === 'manual' && (
           <div className="p-6 space-y-6 animate-fadeIn">
             <div className="grid grid-cols-2 gap-4">
-              <StudioSelect label="Genre" icon={<Disc size={12}/>} value={musicGenre} onChange={setMusicGenre} options={['Ballad/OST', 'Folk', 'Pop', 'Cinematic']} />
-              <StudioSelect label="Mood" icon={<Waves size={12}/>} value={musicMood} onChange={setMusicMood} options={['Touching & Sad', 'Hopeful', 'Urgent', 'Calm']} />
-              <StudioSelect label="Instruments" icon={<Mic2 size={12}/>} value={musicInstruments} onChange={setMusicInstruments} options={['Piano, Strings', 'Acoustic Guitar', 'Orchestra', 'Minimal']} />
-              <StudioSelect label="Tempo" icon={<Volume2 size={12}/>} value={musicTempo} onChange={setMusicTempo} options={['Slow', 'Medium', 'Fast']} />
+              <StudioSelect label="Genre" icon={<Disc size={12}/>} value={musicGenre} onChange={setMusicGenre} options={MUSIC_GENRES} />
+              <StudioSelect label="Mood" icon={<Waves size={12}/>} value={musicMood} onChange={setMusicMood} options={MUSIC_MOODS} />
+              <StudioSelect label="Instruments" icon={<Mic2 size={12}/>} value={musicInstruments} onChange={setMusicInstruments} options={MUSIC_INSTRUMENTS} />
+              <StudioSelect label="Tempo" icon={<Volume2 size={12}/>} value={musicTempo} onChange={setMusicTempo} options={['Slow', 'Medium', 'Fast', 'Variable']} />
             </div>
-            <textarea value={manualMusicStyle} onChange={(e) => setManualMusicStyle(e.target.value)} placeholder="추가적인 음악적 요청 사항을 입력하세요..." className="w-full h-24 p-4 bg-black/40 rounded-xl border border-purple-500/20 text-white text-xs outline-none focus:border-purple-500 transition-colors" />
+            <textarea value={manualMusicStyle} onChange={(e) => setManualMusicStyle(e.target.value)} placeholder="추가적인 음악적 요청 사항을 입력하세요... (예: 2절부터는 드럼 비트가 강하게 들어갔으면 좋겠어)" className="w-full h-24 p-4 bg-black/40 rounded-xl border border-purple-500/20 text-white text-xs outline-none focus:border-purple-500 transition-colors" />
           </div>
         )}
       </section>
@@ -194,10 +233,10 @@ const InputStep: React.FC<InputStepProps> = ({ value, onChange, onNext, apiKey }
 
             {/* Visual Control Grid */}
             <div className="grid grid-cols-2 gap-4">
-              <StudioSelect label="Lighting" icon={<Sun size={12}/>} value={lighting} onChange={setLighting} options={['Cinematic/Moody', 'Natural', 'Studio', 'Dark/Mystery']} />
-              <StudioSelect label="Angle" icon={<Video size={12}/>} value={angle} onChange={setAngle} options={['Eye Level', 'Low Angle', 'High Angle', 'Close-up']} />
-              <StudioSelect label="Background" icon={<Map size={12}/>} value={background} onChange={setBackground} options={['Realistic Location', 'Blurry', 'Solid Color', 'Abstract']} />
-              <StudioSelect label="Art Style" icon={<Sparkles size={12}/>} value={style} onChange={setStyle} options={['Documentary Photo', '3D Pixar Style', 'Oil Painting', 'Sketch']} />
+              <StudioSelect label="Lighting" icon={<Sun size={12}/>} value={lighting} onChange={setLighting} options={VISUAL_LIGHTING} />
+              <StudioSelect label="Angle" icon={<Video size={12}/>} value={angle} onChange={setAngle} options={VISUAL_ANGLES} />
+              <StudioSelect label="Background" icon={<Map size={12}/>} value={background} onChange={setBackground} options={VISUAL_BACKGROUNDS} />
+              <StudioSelect label="Art Style" icon={<Sparkles size={12}/>} value={style} onChange={setStyle} options={VISUAL_STYLES} />
             </div>
 
             {/* Aspect Ratio */}
@@ -225,9 +264,16 @@ const InputStep: React.FC<InputStepProps> = ({ value, onChange, onNext, apiKey }
 const StudioSelect = ({ label, icon, value, onChange, options }: any) => (
   <div className="space-y-2">
     <label className="text-[9px] font-black text-slate-600 uppercase flex items-center gap-1">{icon}{label}</label>
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 outline-none focus:border-blue-500 appearance-none">
-      {options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-    </select>
+    <div className="relative">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-300 outline-none focus:border-blue-500 appearance-none truncate pr-8">
+        {options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+      </select>
+      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+    </div>
   </div>
 );
 

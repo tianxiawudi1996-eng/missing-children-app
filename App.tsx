@@ -40,6 +40,8 @@ const App: React.FC = () => {
         setHistory(JSON.parse(saved));
       } catch (e) {
         console.error("Failed to load history", e);
+        // If history is corrupted, clear it
+        localStorage.removeItem('missing_children_history');
       }
     }
     
@@ -49,15 +51,42 @@ const App: React.FC = () => {
   }, []);
 
   const saveToHistory = (data: GenerationResult, source: string) => {
+    // [FIX] localStorage Quota Exceeded Error 방지
+    // 브라우저 localStorage는 약 5MB 제한이 있습니다. 
+    // Base64 이미지를 포함하면 금방 터지므로, 히스토리 저장 시에는 이미지를 제거하고 텍스트 데이터만 저장합니다.
+    const historyData = {
+      ...data,
+      imagePrompts: data.imagePrompts.map(prompt => ({
+        ...prompt,
+        generatedImage: undefined // 이미지 데이터 제거 (텍스트 프롬프트는 유지)
+      }))
+    };
+
     const newItem: HistoryItem = {
       id: Date.now().toString(),
       timestamp: Date.now(),
-      data,
+      data: historyData,
       sourceText: source
     };
-    const updated = [newItem, ...history];
-    setHistory(updated);
-    localStorage.setItem('missing_children_history', JSON.stringify(updated));
+    
+    try {
+      // 히스토리 개수를 최근 30개로 제한
+      const updated = [newItem, ...history].slice(0, 30);
+      setHistory(updated);
+      localStorage.setItem('missing_children_history', JSON.stringify(updated));
+    } catch (e) {
+      console.error("Storage full, attempting cleanup", e);
+      try {
+         // 만약 그래도 꽉 찼다면, 이번 항목만이라도 저장 시도 (기존 것 날림) 혹은 경고
+         // 여기서는 안전하게 에러 메시지만 띄우지 않도록 처리
+         const emergencyRescue = [newItem];
+         setHistory(emergencyRescue);
+         localStorage.setItem('missing_children_history', JSON.stringify(emergencyRescue));
+      } catch (finalError) {
+         console.error("History save failed completely", finalError);
+         setError("브라우저 저장 공간 부족으로 히스토리가 저장되지 않았습니다. (이미지가 너무 많을 수 있습니다)");
+      }
+    }
   };
 
   const deleteHistoryItem = (id: string, e: React.MouseEvent) => {
@@ -113,7 +142,7 @@ const App: React.FC = () => {
       };
       
       const data = await generateContent(fullOptions);
-      saveToHistory(data, sourceText); // Auto-save to history
+      saveToHistory(data, sourceText); // Auto-save to history (Lite version)
       
       setResults(data);
       setStep(AppStep.RESULTS);

@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 import { GenerationResult, GenerationOptions } from "../types";
@@ -5,17 +6,18 @@ import { GenerationResult, GenerationOptions } from "../types";
 const generationSchema = {
   type: Type.OBJECT,
   properties: {
+    category: { type: Type.STRING, enum: ["MISSING", "RAINBOW", "TOGETHER", "GROWTH", "ADOPTION"] },
     factSummary: {
       type: Type.OBJECT,
       properties: {
         name: { type: Type.STRING },
-        missingDate: { type: Type.STRING },
+        subInfo: { type: Type.STRING },
         location: { type: Type.STRING },
-        physicalFeatures: { type: Type.STRING },
+        breedAndFeatures: { type: Type.STRING },
         situation: { type: Type.STRING },
-        familyMessage: { type: Type.STRING },
+        ownerMessage: { type: Type.STRING },
       },
-      required: ["name", "missingDate", "location", "physicalFeatures", "situation", "familyMessage"],
+      required: ["name", "subInfo", "location", "breedAndFeatures", "situation", "ownerMessage"],
     },
     storyType: { type: Type.STRING },
     emotionalIntent: { type: Type.STRING },
@@ -62,6 +64,9 @@ const generationSchema = {
     },
     imagePrompts: {
       type: Type.ARRAY,
+      description: "MANDATORY: Generate exactly 20 distinct scenes for the storyboard.",
+      minItems: 20,
+      maxItems: 20,
       items: {
         type: Type.OBJECT,
         properties: {
@@ -76,122 +81,138 @@ const generationSchema = {
     },
   },
   required: [
-    "factSummary", "storyType", "emotionalIntent", "musicDirection", "track1", "track2", "youtubePackage", "imagePrompts"
+    "category", "factSummary", "storyType", "emotionalIntent", "musicDirection", "track1", "track2", "youtubePackage", "imagePrompts"
   ],
 };
 
-// Helper to get the valid API key
-const getApiKey = (providedKey?: string) => {
-  const key = providedKey || process.env.API_KEY;
-  if (!key) throw new Error("Gemini API Key가 필요합니다. 설정(Settings) 메뉴에서 키를 입력해주세요.");
-  return key;
-};
-
-// --- NEW: Test Connection Function ---
-export const validateApiKey = async (apiKey: string): Promise<boolean> => {
-  if (!apiKey) return false;
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-    // Minimal token usage request to test auth
-    await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: "ping",
-    });
-    return true;
-  } catch (e) {
-    console.error("API Key Validation Failed:", e);
-    throw e;
-  }
-};
-
-// --- RESTORED: Missing Children YouTube Analysis ---
-export const analyzeYoutubeContent = async (rawText: string, providedKey?: string): Promise<string> => {
-  const apiKey = getApiKey(providedKey);
-  const ai = new GoogleGenAI({ apiKey });
+// UPDATED: Check process.env first, then localStorage for deployed apps
+const getApiKey = () => {
+  const envKey = process.env.API_KEY;
+  if (envKey) return envKey;
   
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: `이 텍스트는 실종 아동 관련 뉴스 보도나 전단지의 내용입니다. 
-    이 텍스트에서 실종 아동의 이름, 나이, 실종된 날짜, 실종 장소, 신체 특징(키, 체중, 착의, 흉터 등), 실종 당시의 상황을 추출하여 
-    "한 편의 완성된 실종 아동 프로필 및 사연" 형태로 다시 작성해주세요. 
-    불필요한 인사말이나 앵커 멘트는 모두 제거하고 팩트 위주로 작성하세요. 반드시 한국어로 작성하세요.
-    
-    데이터:\n${rawText}`,
-    config: {
-      temperature: 0.7,
-      topP: 0.95,
-    }
-  });
+  const localKey = localStorage.getItem("gemini_api_key");
+  if (localKey) return localKey;
 
-  return response.text || "분석 결과가 없습니다.";
+  throw new Error("API Key is missing. Please set it in Settings.");
 };
+
+// Helper for batch processing to avoid rate limits and improve stability
+async function processInBatches<T, R>(
+  items: T[],
+  batchSize: number,
+  processItem: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(processItem));
+    results.push(...batchResults);
+  }
+  return results;
+}
 
 export const generateContent = async (options: GenerationOptions): Promise<GenerationResult> => {
-  const apiKey = getApiKey(options.apiKey);
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
-  const musicDirectives = `MUSIC_STUDIO_SETTINGS: [Genre: ${options.musicSettings.genre}, Mood: ${options.musicSettings.mood}, Instruments: ${options.musicSettings.instruments}, Tempo: ${options.musicSettings.tempo}]. ${options.manualMusicStyle || ''}`;
-  const visualDirectives = `VISUAL_STUDIO_SETTINGS: [Lighting: ${options.visualSettings.lighting}, Angle: ${options.visualSettings.angle}, Background: ${options.visualSettings.background}, Style: ${options.visualSettings.style}]`;
-
-  let promptContent = `SOURCE_TEXT:\n${options.sourceText}\n\n`;
-  promptContent += `USER_DIRECTIVES:\n${musicDirectives}\n${visualDirectives}\n`;
+  // 1. Prepare Content for Text/Lyrics Generation (Multimodal)
+  const parts: any[] = [];
   
+  // Add reference images to the context so the AI can "see" the pet for lyrics/story
+  if (options.referenceImages && options.referenceImages.length > 0) {
+    options.referenceImages.forEach(base64 => {
+      parts.push({ inlineData: { data: base64, mimeType: 'image/png' } });
+    });
+  }
+
+  const producerBrief = `
+    [REQUEST FROM LABEL EXECUTIVE]
+    Target Category: ${options.category} (${options.category === 'MISSING' ? 'URGENT' : 'EMOTIONAL'})
+    Source Data: ${options.sourceText}
+
+    [MANDATORY REQUIREMENTS]
+    1. **Lyrics:** Create a full 4-minute song structure. REPEAT THE CHORUS LYRICS EXPLICITLY. Do not use shortcuts like "(x2)".
+    2. **Vision:** Analyze the provided images (if any) and incorporate specific visual details (fur color, eyes, specific items) into the lyrics and story.
+    3. **Visuals:** Generate exactly 20 storyboard scenes.
+    4. **Tone:** Apply the specific "CATEGORY-SPECIFIC DIRECTION" from the System Instruction strictly.
+    
+    Make this a masterpiece.
+  `;
+  parts.push({ text: producerBrief });
+
+  // 2. Generate JSON (Lyrics & Storyboard)
   const textResponse = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: promptContent,
+    model: "gemini-3-pro-preview",
+    contents: { parts }, // Now includes images + text
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: "application/json",
       responseSchema: generationSchema,
+      thinkingConfig: { thinkingBudget: 32768 }
     },
   });
 
   const result = JSON.parse(textResponse.text!) as GenerationResult;
 
+  // 3. Generate 20 Images (Batched for stability)
   if (options.autoGenerateImages && result.imagePrompts) {
-    const visualMod = `Visual Directive: ${visualDirectives}. Negative Prompt: blurred, low quality, distorted.`;
+    const targetPrompts = result.imagePrompts.slice(0, 20);
     
-    const imagePromises = result.imagePrompts.slice(0, 20).map(async (promptData) => {
+    // Process 4 images at a time to prevent browser/API timeout
+    const generatedImages = await processInBatches(targetPrompts, 4, async (promptData) => {
       try {
-        // Must recreate instance or reuse to ensure Image generation also uses the correct key
-        const genAI = new GoogleGenAI({ apiKey });
+        const genAI = new GoogleGenAI({ apiKey: getApiKey() });
+        const imgParts: any[] = [];
         
-        const parts: any[] = [];
+        // Use reference images for style consistency in generated images too
         if (options.referenceImages && options.referenceImages.length > 0) {
           options.referenceImages.forEach(base64 => {
-            parts.push({
-              inlineData: { data: base64, mimeType: 'image/png' }
-            });
+            imgParts.push({ inlineData: { data: base64, mimeType: 'image/png' } });
           });
         }
-        parts.push({ text: `${promptData.imagePromptEN}. ${visualMod}. Style Keywords: ${promptData.styleKeywords}` });
+        
+        // Enhanced Prompt for 8K Quality
+        imgParts.push({ text: `${promptData.imagePromptEN}. Masterpiece, Cinematic Lighting, 8K, Highly Detailed, Photorealistic. Style: ${promptData.styleKeywords}` });
 
         const imgResponse = await genAI.models.generateContent({
           model: 'gemini-3-pro-image-preview',
-          contents: { parts },
+          contents: { parts: imgParts },
           config: {
-            imageConfig: {
-              aspectRatio: options.aspectRatio,
-              imageSize: "1K"
-            }
+            imageConfig: { aspectRatio: options.aspectRatio, imageSize: "1K" }
           }
         });
 
         for (const part of imgResponse.candidates?.[0]?.content?.parts || []) {
           if (part.inlineData) return part.inlineData.data;
         }
-      } catch (e) {
-        console.error("Image generation failed:", e);
+      } catch (e: any) {
+        console.error("Scene generation failed:", e);
+        // Return undefined to continue even if one image fails
       }
       return undefined;
     });
 
-    const generatedImages = await Promise.all(imagePromises);
-    result.imagePrompts = result.imagePrompts.map((p, i) => ({
+    result.imagePrompts = targetPrompts.map((p, i) => ({
       ...p,
       generatedImage: generatedImages[i]
     }));
   }
 
   return result;
+};
+
+export const validateApiKey = async (): Promise<boolean> => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    await ai.models.generateContent({ model: "gemini-3-flash-preview", contents: "ping" });
+    return true;
+  } catch { return false; }
+};
+
+export const analyzeYoutubeContent = async (rawText: string): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
+  const response = await ai.models.generateContent({
+    model: "gemini-3-pro-preview",
+    contents: `Extract the full emotional narrative for a 4-minute epic song:\n${rawText}`
+  });
+  return response.text || "No result.";
 };
